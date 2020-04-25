@@ -41,6 +41,7 @@ from libs.labelFile import LabelFile, LabelFileError
 from libs.toolBar import ToolBar
 from libs.pascal_voc_io import PascalVocReader
 from libs.pascal_voc_io import XML_EXT
+from libs.center_io import CenterReader
 from libs.yolo_io import YoloReader
 from libs.yolo_io import TXT_EXT
 from libs.ustr import ustr
@@ -86,6 +87,7 @@ class MainWindow(QMainWindow, WindowMixin):
         # Save as Pascal voc xml
         self.defaultSaveDir = defaultSaveDir
         self.usingPascalVocFormat = True
+        self.usingCenterFormat = True
         self.usingYoloFormat = False
 
         # For loading all image under a directory
@@ -498,18 +500,32 @@ class MainWindow(QMainWindow, WindowMixin):
             self.actions.save_format.setText(FORMAT_PASCALVOC)
             self.actions.save_format.setIcon(newIcon("format_voc"))
             self.usingPascalVocFormat = True
+            self.usingCenterFormat = False
             self.usingYoloFormat = False
             LabelFile.suffix = XML_EXT
+            self.canvas.createPoint = False
+
+        elif save_format == FORMAT_CENTER:
+            self.actions.save_format.setText(FORMAT_CENTER)
+            self.actions.save_format.setIcon(newIcon("format_voc"))
+            self.usingPascalVocFormat = False
+            self.usingCenterFormat = True
+            self.usingYoloFormat = False
+            LabelFile.suffix = XML_EXT
+            self.canvas.createPoint = True
 
         elif save_format == FORMAT_YOLO:
             self.actions.save_format.setText(FORMAT_YOLO)
             self.actions.save_format.setIcon(newIcon("format_yolo"))
             self.usingPascalVocFormat = False
+            self.usingCenterFormat = False
             self.usingYoloFormat = True
             LabelFile.suffix = TXT_EXT
+            self.canvas.createPoint = False
 
     def change_format(self):
-        if self.usingPascalVocFormat: self.set_format(FORMAT_YOLO)
+        if self.usingPascalVocFormat: self.set_format(FORMAT_CENTER)
+        elif self.usingCenterFormat: self.set_format(FORMAT_YOLO)
         elif self.usingYoloFormat: self.set_format(FORMAT_PASCALVOC)
 
     def noShapes(self):
@@ -758,14 +774,21 @@ class MainWindow(QMainWindow, WindowMixin):
         s = []
         for label, points, line_color, fill_color, difficult in shapes:
             shape = Shape(label=label)
-            for x, y in points:
-
-                # Ensure the labels are within the bounds of the image. If not, fix them.
+            if self.usingCenterFormat:
+                x, y = points
                 x, y, snapped = self.canvas.snapPointToCanvas(x, y)
                 if snapped:
                     self.setDirty()
-
                 shape.addPoint(QPointF(x, y))
+            else:
+                for x, y in points:
+
+                    # Ensure the labels are within the bounds of the image. If not, fix them.
+                    x, y, snapped = self.canvas.snapPointToCanvas(x, y)
+                    if snapped:
+                        self.setDirty()
+
+                    shape.addPoint(QPointF(x, y))
             shape.difficult = difficult
             shape.close()
             s.append(shape)
@@ -816,6 +839,11 @@ class MainWindow(QMainWindow, WindowMixin):
                 if annotationFilePath[-4:].lower() != ".xml":
                     annotationFilePath += XML_EXT
                 self.labelFile.savePascalVocFormat(annotationFilePath, shapes, self.filePath, self.imageData,
+                                                   self.lineColor.getRgb(), self.fillColor.getRgb())
+            elif self.usingCenterFormat is True:
+                if annotationFilePath[-4:].lower() != ".xml":
+                    annotationFilePath += XML_EXT
+                self.labelFile.saveCenterFormat(annotationFilePath, shapes, self.filePath, self.imageData,
                                                    self.lineColor.getRgb(), self.fillColor.getRgb())
             elif self.usingYoloFormat is True:
                 if annotationFilePath[-4:].lower() != ".txt":
@@ -1063,15 +1091,23 @@ class MainWindow(QMainWindow, WindowMixin):
                 """Annotation file priority:
                 PascalXML > YOLO
                 """
+                print(xmlPath)
                 if os.path.isfile(xmlPath):
-                    self.loadPascalXMLByFilename(xmlPath)
+                    xmlPath = os.path.abspath(xmlPath)
+                    if 'center_anno' in xmlPath:
+                        self.loadCenterXMLByFilename(xmlPath)
+                    else:
+                        self.loadPascalXMLByFilename(xmlPath)
                 elif os.path.isfile(txtPath):
                     self.loadYOLOTXTByFilename(txtPath)
             else:
                 xmlPath = os.path.splitext(filePath)[0] + XML_EXT
                 txtPath = os.path.splitext(filePath)[0] + TXT_EXT
                 if os.path.isfile(xmlPath):
-                    self.loadPascalXMLByFilename(xmlPath)
+                    if 'center_anno' in xmlPath:
+                        self.loadCenterXMLByFilename(xmlPath)
+                    else:
+                        self.loadPascalXMLByFilename(xmlPath)
                 elif os.path.isfile(txtPath):
                     self.loadYOLOTXTByFilename(txtPath)
 
@@ -1453,6 +1489,19 @@ class MainWindow(QMainWindow, WindowMixin):
         shapes = tVocParseReader.getShapes()
         self.loadLabels(shapes)
         self.canvas.verified = tVocParseReader.verified
+
+    def loadCenterXMLByFilename(self, xmlPath):
+        if self.filePath is None:
+            return
+        if os.path.isfile(xmlPath) is False:
+            return
+
+        self.set_format(FORMAT_CENTER)
+
+        tCenterParseReader = CenterReader(xmlPath)
+        shapes = tCenterParseReader.getShapes()
+        self.loadLabels(shapes)
+        self.canvas.verified = tCenterParseReader.verified
 
     def loadYOLOTXTByFilename(self, txtPath):
         if self.filePath is None:

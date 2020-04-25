@@ -62,6 +62,7 @@ class Canvas(QWidget):
         self.setFocusPolicy(Qt.WheelFocus)
         self.verified = False
         self.drawSquare = False
+        self.createPoint = False
 
     def setDrawingColor(self, qColor):
         self.drawingLineColor = qColor
@@ -115,39 +116,53 @@ class Canvas(QWidget):
         if self.drawing():
             self.overrideCursor(CURSOR_DRAW)
             if self.current:
-                # Display annotation width and height while drawing
-                currentWidth = abs(self.current[0].x() - pos.x())
-                currentHeight = abs(self.current[0].y() - pos.y())
-                self.parent().window().labelCoordinates.setText(
-                        'Width: %d, Height: %d / X: %d; Y: %d' % (currentWidth, currentHeight, pos.x(), pos.y()))
-                
-                color = self.drawingLineColor
-                if self.outOfPixmap(pos):
-                    # Don't allow the user to draw outside the pixmap.
-                    # Project the point to the pixmap's edges.
-                    pos = self.intersectionPoint(self.current[-1], pos)
-                elif len(self.current) > 1 and self.closeEnough(pos, self.current[0]):
-                    # Attract line to starting point and colorise to alert the
-                    # user:
-                    pos = self.current[0]
-                    color = self.current.line_color
-                    self.overrideCursor(CURSOR_POINT)
-                    self.current.highlightVertex(0, Shape.NEAR_VERTEX)
-
-                if self.drawSquare:
-                    initPos = self.current[0]
-                    minX = initPos.x()
-                    minY = initPos.y()
-                    min_size = min(abs(pos.x() - minX), abs(pos.y() - minY))
-                    directionX = -1 if pos.x() - minX < 0 else 1
-                    directionY = -1 if pos.y() - minY < 0 else 1
-                    self.line[1] = QPointF(minX + directionX * min_size, minY + directionY * min_size)
+                if self.createPoint:
+                    # Draw point
+                    self.parent().window().labelCoordinates.setText(
+                            ' X: %d; Y: %d' % (pos.x(), pos.y()))
+                    color = self.drawingLineColor
+                    if self.outOfPixmap(pos):
+                        pos = self.intersectionPoint(self.current[-1], pos)
+                    else:
+                        pos = self.current[0]
+                        color = self.current.line_color
+                        self.overrideCursor(CURSOR_POINT)
+                        self.current.highlightVertex(0, Shape.NEAR_VERTEX)
                 else:
-                    self.line[1] = pos
+                    # Draw box
+                    # Display annotation width and height while drawing
+                    currentWidth = abs(self.current[0].x() - pos.x())
+                    currentHeight = abs(self.current[0].y() - pos.y())
+                    self.parent().window().labelCoordinates.setText(
+                            'Width: %d, Height: %d / X: %d; Y: %d' % (currentWidth, currentHeight, pos.x(), pos.y()))
+                    
+                    color = self.drawingLineColor
+                    if self.outOfPixmap(pos):
+                        # Don't allow the user to draw outside the pixmap.
+                        # Project the point to the pixmap's edges.
+                        pos = self.intersectionPoint(self.current[-1], pos)
+                    elif len(self.current) > 1 and self.closeEnough(pos, self.current[0]):
+                        # Attract line to starting point and colorise to alert the
+                        # user:
+                        pos = self.current[0]
+                        color = self.current.line_color
+                        self.overrideCursor(CURSOR_POINT)
+                        self.current.highlightVertex(0, Shape.NEAR_VERTEX)
 
-                self.line.line_color = color
-                self.prevPoint = QPointF()
-                self.current.highlightClear()
+                    if self.drawSquare:
+                        initPos = self.current[0]
+                        minX = initPos.x()
+                        minY = initPos.y()
+                        min_size = min(abs(pos.x() - minX), abs(pos.y() - minY))
+                        directionX = -1 if pos.x() - minX < 0 else 1
+                        directionY = -1 if pos.y() - minY < 0 else 1
+                        self.line[1] = QPointF(minX + directionX * min_size, minY + directionY * min_size)
+                    else:
+                        self.line[1] = pos
+
+                    self.line.line_color = color
+                    self.prevPoint = QPointF()
+                    self.current.highlightClear()
             else:
                 self.prevPoint = pos
             self.repaint()
@@ -217,6 +232,7 @@ class Canvas(QWidget):
         pos = self.transformPos(ev.pos())
 
         if ev.button() == Qt.LeftButton:
+            
             if self.drawing():
                 self.handleDrawing(pos)
             else:
@@ -270,24 +286,33 @@ class Canvas(QWidget):
             self.repaint()
 
     def handleDrawing(self, pos):
-        if self.current and self.current.reachMaxPoints() is False:
-            initPos = self.current[0]
-            minX = initPos.x()
-            minY = initPos.y()
-            targetPos = self.line[1]
-            maxX = targetPos.x()
-            maxY = targetPos.y()
-            self.current.addPoint(QPointF(maxX, minY))
-            self.current.addPoint(targetPos)
-            self.current.addPoint(QPointF(minX, maxY))
-            self.finalise()
-        elif not self.outOfPixmap(pos):
-            self.current = Shape()
-            self.current.addPoint(pos)
-            self.line.points = [pos, pos]
-            self.setHiding()
-            self.drawingPolygon.emit(True)
-            self.update()
+        if self.createPoint:
+            if self.current is not None:
+                # Released
+                self.current.addPoint(pos)
+                self.finalise()
+            else:
+                # Pressed
+                self.current = Shape()
+        else:
+            if self.current and self.current.reachMaxPoints() is False:
+                initPos = self.current[0]
+                minX = initPos.x()
+                minY = initPos.y()
+                targetPos = self.line[1]
+                maxX = targetPos.x()
+                maxY = targetPos.y()
+                self.current.addPoint(QPointF(maxX, minY))
+                self.current.addPoint(targetPos)
+                self.current.addPoint(QPointF(minX, maxY))
+                self.finalise()
+            elif not self.outOfPixmap(pos):
+                self.current = Shape()
+                self.current.addPoint(pos)
+                self.line.points = [pos, pos]
+                self.setHiding()
+                self.drawingPolygon.emit(True)
+                self.update()
 
     def setHiding(self, enable=True):
         self._hideBackround = self.hideBackround if enable else False
@@ -352,32 +377,35 @@ class Canvas(QWidget):
         if self.outOfPixmap(pos):
             pos = self.intersectionPoint(point, pos)
 
-        if self.drawSquare:
-            opposite_point_index = (index + 2) % 4
-            opposite_point = shape[opposite_point_index]
-
-            min_size = min(abs(pos.x() - opposite_point.x()), abs(pos.y() - opposite_point.y()))
-            directionX = -1 if pos.x() - opposite_point.x() < 0 else 1
-            directionY = -1 if pos.y() - opposite_point.y() < 0 else 1
-            shiftPos = QPointF(opposite_point.x() + directionX * min_size - point.x(),
-                               opposite_point.y() + directionY * min_size - point.y())
+        if len(shape.points) == 1:
+            shape.moveVertexBy(0, pos-point)
         else:
-            shiftPos = pos - point
+            if self.drawSquare:
+                opposite_point_index = (index + 2) % 4
+                opposite_point = shape[opposite_point_index]
 
-        shape.moveVertexBy(index, shiftPos)
+                min_size = min(abs(pos.x() - opposite_point.x()), abs(pos.y() - opposite_point.y()))
+                directionX = -1 if pos.x() - opposite_point.x() < 0 else 1
+                directionY = -1 if pos.y() - opposite_point.y() < 0 else 1
+                shiftPos = QPointF(opposite_point.x() + directionX * min_size - point.x(),
+                                opposite_point.y() + directionY * min_size - point.y())
+            else:
+                shiftPos = pos - point
 
-        lindex = (index + 1) % 4
-        rindex = (index + 3) % 4
-        lshift = None
-        rshift = None
-        if index % 2 == 0:
-            rshift = QPointF(shiftPos.x(), 0)
-            lshift = QPointF(0, shiftPos.y())
-        else:
-            lshift = QPointF(shiftPos.x(), 0)
-            rshift = QPointF(0, shiftPos.y())
-        shape.moveVertexBy(rindex, rshift)
-        shape.moveVertexBy(lindex, lshift)
+            shape.moveVertexBy(index, shiftPos)
+
+            lindex = (index + 1) % 4
+            rindex = (index + 3) % 4
+            lshift = None
+            rshift = None
+            if index % 2 == 0:
+                rshift = QPointF(shiftPos.x(), 0)
+                lshift = QPointF(0, shiftPos.y())
+            else:
+                lshift = QPointF(shiftPos.x(), 0)
+                rshift = QPointF(0, shiftPos.y())
+            shape.moveVertexBy(rindex, rshift)
+            shape.moveVertexBy(lindex, lshift)
 
     def boundedMoveShape(self, shape, pos):
         if self.outOfPixmap(pos):
@@ -509,7 +537,7 @@ class Canvas(QWidget):
 
     def finalise(self):
         assert self.current
-        if self.current.points[0] == self.current.points[-1]:
+        if not self.createPoint and self.current.points[0] == self.current.points[-1]:
             self.current = None
             self.drawingPolygon.emit(False)
             self.update()
@@ -634,28 +662,20 @@ class Canvas(QWidget):
         # print(self.selectedShape.points)
         if direction == 'Left' and not self.moveOutOfBound(QPointF(-1.0, 0)):
             # print("move Left one pixel")
-            self.selectedShape.points[0] += QPointF(-1.0, 0)
-            self.selectedShape.points[1] += QPointF(-1.0, 0)
-            self.selectedShape.points[2] += QPointF(-1.0, 0)
-            self.selectedShape.points[3] += QPointF(-1.0, 0)
+            for i in range(len(self.selectedShape.points)):
+                self.selectedShape.points[i] += QPointF(-1.0, 0)
         elif direction == 'Right' and not self.moveOutOfBound(QPointF(1.0, 0)):
             # print("move Right one pixel")
-            self.selectedShape.points[0] += QPointF(1.0, 0)
-            self.selectedShape.points[1] += QPointF(1.0, 0)
-            self.selectedShape.points[2] += QPointF(1.0, 0)
-            self.selectedShape.points[3] += QPointF(1.0, 0)
+            for i in range(len(self.selectedShape.points)):
+                self.selectedShape.points[i] += QPointF(1.0, 0)
         elif direction == 'Up' and not self.moveOutOfBound(QPointF(0, -1.0)):
             # print("move Up one pixel")
-            self.selectedShape.points[0] += QPointF(0, -1.0)
-            self.selectedShape.points[1] += QPointF(0, -1.0)
-            self.selectedShape.points[2] += QPointF(0, -1.0)
-            self.selectedShape.points[3] += QPointF(0, -1.0)
+            for i in range(len(self.selectedShape.points)):
+                self.selectedShape.points[i] += QPointF(0, -1.0)
         elif direction == 'Down' and not self.moveOutOfBound(QPointF(0, 1.0)):
             # print("move Down one pixel")
-            self.selectedShape.points[0] += QPointF(0, 1.0)
-            self.selectedShape.points[1] += QPointF(0, 1.0)
-            self.selectedShape.points[2] += QPointF(0, 1.0)
-            self.selectedShape.points[3] += QPointF(0, 1.0)
+            for i in range(len(self.selectedShape.points)):
+                self.selectedShape.points[i] += QPointF(0, 1.0)
         self.shapeMoved.emit()
         self.repaint()
 

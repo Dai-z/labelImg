@@ -86,52 +86,92 @@ class Shape(object):
 
     def paint(self, painter):
         if self.points:
-            color = self.select_line_color if self.selected else self.line_color
-            pen = QPen(color)
-            # Try using integer sizes for smoother drawing(?)
-            pen.setWidth(max(1, int(round(2.0 / self.scale))))
-            painter.setPen(pen)
+            if len(self.points) == 1:
+                color = self.select_line_color if self.selected else self.line_color
+                pen = QPen(color)
+                # Try using integer sizes for smoother drawing(?)
+                pen.setWidth(max(1, int(round(2.0 / self.scale))))
+                painter.setPen(pen)
 
-            line_path = QPainterPath()
-            vrtx_path = QPainterPath()
+                line_path = QPainterPath()
 
-            line_path.moveTo(self.points[0])
-            # Uncommenting the following line will draw 2 paths
-            # for the 1st vertex, and make it non-filled, which
-            # may be desirable.
-            #self.drawVertex(vrtx_path, 0)
+                line_path.moveTo(self.points[0])
 
-            for i, p in enumerate(self.points):
-                line_path.lineTo(p)
-                self.drawVertex(vrtx_path, i)
-            if self.isClosed():
-                line_path.lineTo(self.points[0])
+                line_path.addEllipse(self.points[0], 12.0, 12.0)
+                if self.isClosed():
+                    line_path.lineTo(self.points[0])
 
-            painter.drawPath(line_path)
-            painter.drawPath(vrtx_path)
-            painter.fillPath(vrtx_path, self.vertex_fill_color)
+                painter.drawPath(line_path)
 
-            # Draw text at the top-left
-            if self.paintLabel:
-                min_x = sys.maxsize
-                min_y = sys.maxsize
-                for point in self.points:
-                    min_x = min(min_x, point.x())
-                    min_y = min(min_y, point.y())
-                if min_x != sys.maxsize and min_y != sys.maxsize:
-                    font = QFont()
-                    font.setPointSize(8)
-                    font.setBold(True)
-                    painter.setFont(font)
-                    if(self.label == None):
-                        self.label = ""
-                    if(min_y < MIN_Y_LABEL):
-                        min_y += MIN_Y_LABEL
-                    painter.drawText(min_x, min_y, self.label)
+                # Draw text at the top-left
+                if self.paintLabel:
+                    min_x = sys.maxsize
+                    min_y = sys.maxsize
+                    for point in self.points:
+                        min_x = min(min_x, point.x())
+                        min_y = min(min_y, point.y())
+                    if min_x != sys.maxsize and min_y != sys.maxsize:
+                        font = QFont()
+                        font.setPointSize(8)
+                        font.setBold(True)
+                        painter.setFont(font)
+                        if(self.label == None):
+                            self.label = ""
+                        if(min_y < MIN_Y_LABEL):
+                            min_y += MIN_Y_LABEL
+                        painter.drawText(min_x, min_y, self.label)
 
-            if self.fill:
-                color = self.select_fill_color if self.selected else self.fill_color
-                painter.fillPath(line_path, color)
+                if self.fill:
+                    color = self.select_fill_color if self.selected else self.fill_color
+                    painter.fillPath(line_path, color)
+
+            elif len(self.points) == 4:
+                color = self.select_line_color if self.selected else self.line_color
+                pen = QPen(color)
+                # Try using integer sizes for smoother drawing(?)
+                pen.setWidth(max(1, int(round(2.0 / self.scale))))
+                painter.setPen(pen)
+
+                line_path = QPainterPath()
+                vrtx_path = QPainterPath()
+
+                line_path.moveTo(self.points[0])
+                # Uncommenting the following line will draw 2 paths
+                # for the 1st vertex, and make it non-filled, which
+                # may be desirable.
+                #self.drawVertex(vrtx_path, 0)
+
+                for i, p in enumerate(self.points):
+                    line_path.lineTo(p)
+                    self.drawVertex(vrtx_path, i)
+                if self.isClosed():
+                    line_path.lineTo(self.points[0])
+
+                painter.drawPath(line_path)
+                painter.drawPath(vrtx_path)
+                painter.fillPath(vrtx_path, self.vertex_fill_color)
+
+                # Draw text at the top-left
+                if self.paintLabel:
+                    min_x = sys.maxsize
+                    min_y = sys.maxsize
+                    for point in self.points:
+                        min_x = min(min_x, point.x())
+                        min_y = min(min_y, point.y())
+                    if min_x != sys.maxsize and min_y != sys.maxsize:
+                        font = QFont()
+                        font.setPointSize(8)
+                        font.setBold(True)
+                        painter.setFont(font)
+                        if(self.label == None):
+                            self.label = ""
+                        if(min_y < MIN_Y_LABEL):
+                            min_y += MIN_Y_LABEL
+                        painter.drawText(min_x, min_y, self.label)
+
+                if self.fill:
+                    color = self.select_fill_color if self.selected else self.fill_color
+                    painter.fillPath(line_path, color)
 
     def drawVertex(self, path, i):
         d = self.point_size / self.scale
@@ -173,7 +213,10 @@ class Shape(object):
         self.points = [p + offset for p in self.points]
 
     def moveVertexBy(self, i, offset):
-        self.points[i] = self.points[i] + offset
+        if (len(self.points) == 1):
+            self.points[0] += offset
+        else:
+            self.points[i] = self.points[i] + offset
 
     def highlightVertex(self, i, action):
         self._highlightIndex = i
