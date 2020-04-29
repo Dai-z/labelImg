@@ -791,7 +791,9 @@ class MainWindow(QMainWindow, WindowMixin):
                     shape.addPoint(QPointF(x, y))
             shape.difficult = difficult
             shape.close()
+            shape.scale = self.canvas.pixmap.width() / 960.0
             s.append(shape)
+            print(s[-1].scale)
 
             if line_color:
                 shape.line_color = QColor(*line_color)

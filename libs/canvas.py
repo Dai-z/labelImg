@@ -544,6 +544,7 @@ class Canvas(QWidget):
             return
 
         self.current.close()
+        self.current.scale = self.pixmap.width() / 960
         self.shapes.append(self.current)
         self.current = None
         self.setHiding(False)
